@@ -1,1 +1,43 @@
-.venv
+__pycache__/
+*.py[cod]
+*$py.class
+
+# バーチャル環境
+.venv/
+venv/
+env/
+ENV/
+
+# ビルド・配布物
+build/
+dist/
+*.egg-info/
+
+# ログ・モデル出力
+log/
+logs/
+model/
+*.log
+*.pt
+*.pth
+*.ckpt
+*.tar
+*.npz
+
+# データ生成物
+data/**/*.cpkl
+data/**/*.npz
+
+# ツール・エディタ設定
+.vscode/
+.idea/
+.DS_Store
+*.swp
+*.swo
+
+# Jupyter/キャッシュ
+.ipynb_checkpoints/
+.pytest_cache/
+.cache/
+.coverage
+htmlcov/
