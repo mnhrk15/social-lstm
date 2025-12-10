@@ -27,6 +27,7 @@ model/
 # データ生成物
 data/**/*.cpkl
 data/**/*.npz
+*.pkl
 
 # ツール・エディタ設定
 .vscode/
