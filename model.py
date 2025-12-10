@@ -17,7 +17,8 @@ class SocialModel(nn.Module):
 
         self.args = args
         self.infer = infer
-        self.use_cuda = args.use_cuda
+        self.device = getattr(args, "device", torch.device("cuda" if args.use_cuda else "cpu"))
+        self.use_cuda = self.device.type != "cpu"
 
         if infer:
             # Test time
@@ -67,9 +68,7 @@ class SocialModel(nn.Module):
         numNodes = grid.size()[0]
 
         # Construct the variable
-        social_tensor = Variable(torch.zeros(numNodes, self.grid_size*self.grid_size, self.rnn_size))
-        if self.use_cuda:
-            social_tensor = social_tensor.cuda()
+        social_tensor = Variable(torch.zeros(numNodes, self.grid_size*self.grid_size, self.rnn_size, device=self.device))
         
         # For each ped
         for node in range(numNodes):
@@ -118,9 +117,7 @@ class SocialModel(nn.Module):
         look_up = args[7]
 
         numNodes = len(look_up)
-        outputs = Variable(torch.zeros(self.seq_length * numNodes, self.output_size))
-        if self.use_cuda:            
-            outputs = outputs.cuda()
+        outputs = Variable(torch.zeros(self.seq_length * numNodes, self.output_size, device=self.device))
 
         # For each frame in the sequence
         for framenum,frame in enumerate(input_data):
@@ -142,14 +139,10 @@ class SocialModel(nn.Module):
             #print("lookup table :%s"% look_up)
             list_of_nodes = [look_up[x] for x in nodeIDs]
 
-            corr_index = Variable((torch.LongTensor(list_of_nodes)))
-            if self.use_cuda:            
-                corr_index = corr_index.cuda()
+            corr_index = torch.tensor(list_of_nodes, device=self.device, dtype=torch.long)
 
             #print("list of nodes: %s"%nodeIDs)
             #print("trans: %s"%corr_index)
-            #if self.use_cuda:
-             #   list_of_nodes = list_of_nodes.cuda()
 
 
             #print(list_of_nodes.data)
@@ -197,9 +190,7 @@ class SocialModel(nn.Module):
                 cell_states[corr_index.data] = c_nodes
 
         # Reshape outputs
-        outputs_return = Variable(torch.zeros(self.seq_length, numNodes, self.output_size))
-        if self.use_cuda:
-            outputs_return = outputs_return.cuda()
+        outputs_return = Variable(torch.zeros(self.seq_length, numNodes, self.output_size, device=self.device))
         for framenum in range(self.seq_length):
             for node in range(numNodes):
                 outputs_return[framenum, node, :] = outputs[framenum*numNodes + node, :]

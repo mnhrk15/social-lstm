@@ -1,0 +1,12 @@
+# Suggested commands
+- Install deps (no requirements file): `pip install torch numpy pandas matplotlib`
+- Create folder structure manually (usually auto-run by scripts): `bash make_directories.sh`
+- Train Social LSTM: `python train.py --use_cuda --num_epochs 30 --batch_size 5 [--gru] [--drive]`
+- Train Obstacle LSTM: `python olstm_train.py --use_cuda --num_epochs 50 --grid_size 4 [--gru] [--drive]`
+- Train Vanilla LSTM: `python vlstm_train.py --use_cuda --num_epochs 50 [--gru] [--drive]`
+- Validate a checkpoint: `python validation.py --epoch 15 --method {1|2|3} [--use_cuda] [--drive]`
+- Test/infer and write results: `python test.py --epoch 14 --method {1|2|3} [--use_cuda] [--drive]`
+- Visualize trajectories/plots/videos: `python visualize.py --method {1|2|3} --num_of_data 3 --frame 1 [--gru] [--drive]`
+- Data augmentation (rot/noise): `python generator.py --num_data 5 --seq_length 20 --validation 0.1 [--drive]`
+- Hyperparameter sampling: `python hyperparameter.py --num_samples 500 --best_n 100 [--method {1|2|3}] [--gru]`
+- Common shell utils (Darwin): `ls`, `cd`, `pwd`, `grep -R "pattern" .`, `find . -name "*.py"`, `git status`, `python --version`.

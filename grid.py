@@ -108,7 +108,7 @@ def getGridMask(frame, dimensions, num_person, neighborhood_size, grid_size, is_
 
     return frame_mask
 
-def getSequenceGridMask(sequence, dimensions, pedlist_seq, neighborhood_size, grid_size, using_cuda, is_occupancy=False):
+def getSequenceGridMask(sequence, dimensions, pedlist_seq, neighborhood_size, grid_size, using_cuda, is_occupancy=False, device=None):
     '''
     Get the grid masks for all the frames in the sequence
     params:
@@ -122,10 +122,13 @@ def getSequenceGridMask(sequence, dimensions, pedlist_seq, neighborhood_size, gr
     sl = len(sequence)
     sequence_mask = []
 
+    if device is None:
+        device = torch.device("cuda" if using_cuda and torch.cuda.is_available() else "mps" if using_cuda and torch.backends.mps.is_available() else "cpu")
+
     for i in range(sl):
         mask = Variable(torch.from_numpy(getGridMask(sequence[i], dimensions, len(pedlist_seq[i]), neighborhood_size, grid_size, is_occupancy)).float())
-        if using_cuda:
-            mask = mask.cuda()
+        if using_cuda or device.type != "cpu":
+            mask = mask.to(device)
         sequence_mask.append(mask)
 
     return sequence_mask

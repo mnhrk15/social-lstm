@@ -17,7 +17,8 @@ class OLSTMModel(nn.Module):
 
         self.args = args
         self.infer = infer
-        self.use_cuda = args.use_cuda
+        self.device = getattr(args, "device", torch.device("cuda" if args.use_cuda else "cpu"))
+        self.use_cuda = self.device.type != "cpu"
 
         if infer:
             # Test time
@@ -65,9 +66,7 @@ class OLSTMModel(nn.Module):
         # Number of peds
         numNodes = grid.size()[0]
         # Construct the variable
-        Obs_tensor = Variable(torch.zeros(numNodes, self.grid_size*self.grid_size))
-        if self.use_cuda:
-            Obs_tensor = Obs_tensor.cuda()
+        Obs_tensor = Variable(torch.zeros(numNodes, self.grid_size*self.grid_size, device=self.device))
         # For each ped
         for node in range(numNodes):
             # Compute the obstacle tensor
@@ -117,9 +116,7 @@ class OLSTMModel(nn.Module):
         look_up = args[7]
 
         numNodes = len(look_up)
-        outputs = Variable(torch.zeros(self.seq_length * numNodes, self.output_size))
-        if self.use_cuda:            
-            outputs = outputs.cuda()
+        outputs = Variable(torch.zeros(self.seq_length * numNodes, self.output_size, device=self.device))
 
         # For each frame in the sequence
         for framenum,frame in enumerate(input_data):
@@ -142,9 +139,7 @@ class OLSTMModel(nn.Module):
             #print("lookup table :%s"% look_up)
             list_of_nodes = [look_up[x] for x in nodeIDs]
 
-            corr_index = Variable((torch.LongTensor(list_of_nodes)))
-            if self.use_cuda:
-                corr_index = corr_index.cuda()
+            corr_index = Variable(torch.LongTensor(list_of_nodes, device=self.device))
             #print("list of nodes: %s"%nodeIDs)
             #print("trans: %s"%corr_index)
             #if self.use_cuda:

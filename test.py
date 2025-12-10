@@ -17,6 +17,14 @@ from helper import *
 from grid import getSequenceGridMask, getGridMask
 
 
+def select_device(use_cuda_flag: bool):
+    if use_cuda_flag and torch.cuda.is_available():
+        return torch.device("cuda")
+    if use_cuda_flag and torch.backends.mps.is_available():
+        return torch.device("mps")
+    return torch.device("cpu")
+
+
 def main():
     
     parser = argparse.ArgumentParser()
@@ -50,6 +58,9 @@ def main():
     
     # Parse the parameters
     sample_args = parser.parse_args()
+    device = select_device(sample_args.use_cuda)
+    sample_args.device = device
+    sample_args.use_cuda = device.type != "cpu"
     
     #for drive run
     prefix = ''
@@ -85,6 +96,8 @@ def main():
     # Define the path for the config file for saved args
     with open(os.path.join(save_directory,'config.pkl'), 'rb') as f:
         saved_args = pickle.load(f)
+    saved_args.device = device
+    saved_args.use_cuda = device.type != "cpu"
 
     seq_lenght = sample_args.pred_length + sample_args.obs_length
 
@@ -110,10 +123,7 @@ def main():
 
     for iteration in range(sample_args.iteration):
         # Initialize net
-        net = get_model(sample_args.method, saved_args, True)
-
-        if sample_args.use_cuda:        
-            net = net.cuda()
+        net = get_model(sample_args.method, saved_args, True).to(device)
 
         # Get the checkpoint path
         checkpoint_path = os.path.join(save_directory, save_tar_name+str(sample_args.epoch)+'.tar')
@@ -161,9 +171,9 @@ def main():
             
             #grid mask calculation
             if sample_args.method == 2: #obstacle lstm
-                grid_seq = getSequenceGridMask(x_seq, dataset_data, PedsList_seq, saved_args.neighborhood_size, saved_args.grid_size, saved_args.use_cuda, True)
+                grid_seq = getSequenceGridMask(x_seq, dataset_data, PedsList_seq, saved_args.neighborhood_size, saved_args.grid_size, saved_args.use_cuda, True, device=device)
             elif  sample_args.method == 1: #social lstm   
-                grid_seq = getSequenceGridMask(x_seq, dataset_data, PedsList_seq, saved_args.neighborhood_size, saved_args.grid_size, saved_args.use_cuda)
+                grid_seq = getSequenceGridMask(x_seq, dataset_data, PedsList_seq, saved_args.neighborhood_size, saved_args.grid_size, saved_args.use_cuda, device=device)
 
             #vectorize datapoints
             x_seq, first_values_dict = vectorize_seq(x_seq, PedsList_seq, lookup_seq)
@@ -177,7 +187,7 @@ def main():
 
 
             if sample_args.use_cuda:
-                x_seq = x_seq.cuda()
+                x_seq = x_seq.to(device)
 
             # The sample function
             if sample_args.method == 3: #vanilla lstm
@@ -261,25 +271,18 @@ def sample(x_seq, Pedlist, args, net, true_x_seq, true_Pedlist, saved_args, dime
     '''
     # Number of peds in the sequence
     numx_seq = len(look_up)
+    device = getattr(args, "device", torch.device("cuda" if args.use_cuda else "cpu"))
 
     with torch.no_grad():
         # Construct variables for hidden and cell states
-        hidden_states = Variable(torch.zeros(numx_seq, net.args.rnn_size))
-        if args.use_cuda:
-            hidden_states = hidden_states.cuda()
+        hidden_states = Variable(torch.zeros(numx_seq, net.args.rnn_size, device=device))
         if not is_gru:
-            cell_states = Variable(torch.zeros(numx_seq, net.args.rnn_size))
-            if args.use_cuda:
-                cell_states = cell_states.cuda()
+            cell_states = Variable(torch.zeros(numx_seq, net.args.rnn_size, device=device))
         else:
             cell_states = None
 
 
-        ret_x_seq = Variable(torch.zeros(args.obs_length+args.pred_length, numx_seq, 2))
-
-        # Initialize the return data structure
-        if args.use_cuda:
-            ret_x_seq = ret_x_seq.cuda()
+        ret_x_seq = Variable(torch.zeros(args.obs_length+args.pred_length, numx_seq, 2, device=device))
 
 
         # For the observed part of the trajectory
@@ -331,10 +334,7 @@ def sample(x_seq, Pedlist, args, net, true_x_seq, true_Pedlist, saved_args, dime
             true_Pedlist[tstep+1] = [int(_x_seq) for _x_seq in true_Pedlist[tstep+1]]
             next_ped_list = true_Pedlist[tstep+1].copy()
             converted_pedlist = [look_up[_x_seq] for _x_seq in next_ped_list]
-            list_of_x_seq = Variable(torch.LongTensor(converted_pedlist))
-
-            if args.use_cuda:
-                list_of_x_seq = list_of_x_seq.cuda()
+            list_of_x_seq = Variable(torch.LongTensor(converted_pedlist, device=device))
            
             #Get their predicted positions
             current_x_seq = torch.index_select(ret_x_seq[tstep+1], 0, list_of_x_seq)
@@ -346,9 +346,7 @@ def sample(x_seq, Pedlist, args, net, true_x_seq, true_Pedlist, saved_args, dime
                 elif  args.method == 1: #social lstm   
                     prev_grid = getGridMask(current_x_seq.data.cpu(), dimensions, len(true_Pedlist[tstep+1]),saved_args.neighborhood_size, saved_args.grid_size)
 
-                prev_grid = Variable(torch.from_numpy(prev_grid).float())
-                if args.use_cuda:
-                    prev_grid = prev_grid.cuda()
+                prev_grid = Variable(torch.from_numpy(prev_grid).float()).to(device)
 
         #ret_x_seq[args.obs_length-1] = temp_last_observed
 

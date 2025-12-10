@@ -14,6 +14,14 @@ from grid import getSequenceGridMask
 from helper import *
 
 
+def select_device(use_cuda_flag: bool):
+    if use_cuda_flag and torch.cuda.is_available():
+        return torch.device("cuda")
+    if use_cuda_flag and torch.backends.mps.is_available():
+        return torch.device("mps")
+    return torch.device("cpu")
+
+
 def main():
     
     parser = argparse.ArgumentParser()
@@ -90,7 +98,9 @@ def main():
                         help='Whether store grids and use further epoch')
     
     args = parser.parse_args()
-    
+    device = select_device(args.use_cuda)
+    args.device = device
+    args.use_cuda = device.type != "cpu"
     train(args)
 
 
@@ -151,9 +161,8 @@ def train(args):
         return os.path.join(save_directory, method_name, model_name, save_tar_name+str(x)+'.tar')
 
     # model creation
-    net = SocialModel(args)
-    if args.use_cuda:
-        net = net.cuda()
+    device = args.device
+    net = SocialModel(args).to(device)
 
     #optimizer = torch.optim.RMSprop(net.parameters(), lr=args.learning_rate)
     optimizer = torch.optim.Adagrad(net.parameters(), weight_decay=args.lambda_param)
@@ -198,7 +207,7 @@ def train(args):
             loss_batch = 0
             
             #if we are in a new dataset, zero the counter of batch
-            if dataset_pointer_ins_grid is not dataloader.dataset_pointer and epoch is not 0:
+            if dataset_pointer_ins_grid != dataloader.dataset_pointer and epoch != 0:
                 num_batch = 0
                 dataset_pointer_ins_grid = dataloader.dataset_pointer
 
@@ -219,13 +228,13 @@ def train(args):
 
                 #grid mask calculation and storage depending on grid parameter
                 if(args.grid):
-                    if(epoch is 0):
-                        grid_seq = getSequenceGridMask(x_seq, dataset_data, PedsList_seq,args.neighborhood_size, args.grid_size, args.use_cuda)
+                    if(epoch == 0):
+                        grid_seq = getSequenceGridMask(x_seq, dataset_data, PedsList_seq,args.neighborhood_size, args.grid_size, args.use_cuda, device=device)
                         grids[dataloader.dataset_pointer].append(grid_seq)
                     else:
                         grid_seq = grids[dataloader.dataset_pointer][(num_batch*dataloader.batch_size)+sequence]
                 else:
-                    grid_seq = getSequenceGridMask(x_seq, dataset_data, PedsList_seq,args.neighborhood_size, args.grid_size, args.use_cuda)
+                    grid_seq = getSequenceGridMask(x_seq, dataset_data, PedsList_seq,args.neighborhood_size, args.grid_size, args.use_cuda, device=device)
 
                 # vectorize trajectories in sequence
                 x_seq, _ = vectorize_seq(x_seq, PedsList_seq, lookup_seq)
@@ -287,21 +296,17 @@ def train(args):
                 #x_seq = revert_seq(x_seq, PedsList_seq, lookup_seq, first_values_dict)
 
 
-                if args.use_cuda:                    
-                    x_seq = x_seq.cuda()
+                if args.use_cuda:
+                    x_seq = x_seq.to(device)
 
 
                 #number of peds in this sequence per frame
                 numNodes = len(lookup_seq)
 
 
-                hidden_states = Variable(torch.zeros(numNodes, args.rnn_size))
-                if args.use_cuda:                    
-                    hidden_states = hidden_states.cuda()
+                hidden_states = Variable(torch.zeros(numNodes, args.rnn_size, device=device))
 
-                cell_states = Variable(torch.zeros(numNodes, args.rnn_size))
-                if args.use_cuda:                    
-                    cell_states = cell_states.cuda()
+                cell_states = Variable(torch.zeros(numNodes, args.rnn_size, device=device))
 
                 # Zero out gradients
                 net.zero_grad()
@@ -374,7 +379,7 @@ def train(args):
                     target_id_values = x_seq[0][lookup_seq[target_id], 0:2]
                     
                     #get grid mask
-                    grid_seq = getSequenceGridMask(x_seq, dataset_data, PedsList_seq, args.neighborhood_size, args.grid_size, args.use_cuda)
+                    grid_seq = getSequenceGridMask(x_seq, dataset_data, PedsList_seq, args.neighborhood_size, args.grid_size, args.use_cuda, device=device)
 
                     x_seq, first_values_dict = vectorize_seq(x_seq, PedsList_seq, lookup_seq)
 
@@ -387,18 +392,14 @@ def train(args):
                     # x_seq, first_values_dict = vectorize_seq(x_seq, PedsList_seq, lookup_seq)
 
 
-                    if args.use_cuda:                    
-                        x_seq = x_seq.cuda()
+                    if args.use_cuda:
+                        x_seq = x_seq.to(device)
 
                     #number of peds in this sequence per frame
                     numNodes = len(lookup_seq)
 
-                    hidden_states = Variable(torch.zeros(numNodes, args.rnn_size))
-                    if args.use_cuda:                    
-                        hidden_states = hidden_states.cuda()
-                    cell_states = Variable(torch.zeros(numNodes, args.rnn_size))
-                    if args.use_cuda:                    
-                        cell_states = cell_states.cuda()
+                    hidden_states = Variable(torch.zeros(numNodes, args.rnn_size, device=device))
+                    cell_states = Variable(torch.zeros(numNodes, args.rnn_size, device=device))
 
                     # Forward prop
                     outputs, _, _ = net(x_seq[:-1], grid_seq[:-1], hidden_states, cell_states, PedsList_seq[:-1], numPedsList_seq , dataloader, lookup_seq)
@@ -467,8 +468,8 @@ def train(args):
                 # Get batch data
                 x, y, d , numPedsList, PedsList ,target_ids = dataloader.next_batch()
 
-                if dataset_pointer_ins is not dataloader.dataset_pointer:
-                    if dataloader.dataset_pointer is not 0:
+                if dataset_pointer_ins != dataloader.dataset_pointer:
+                    if dataloader.dataset_pointer != 0:
                         print('Finished prosessed file : ', dataloader.get_file_name(-1),' Avarage error : ', err_epoch/num_of_batch)
                         num_of_batch = 0
                         epoch_result.append(results)
@@ -502,11 +503,11 @@ def train(args):
                     target_id_values = orig_x_seq[0][lookup_seq[target_id], 0:2]
                     
                     #grid mask calculation
-                    grid_seq = getSequenceGridMask(x_seq, dataset_data, PedsList_seq, args.neighborhood_size, args.grid_size, args.use_cuda)
+                    grid_seq = getSequenceGridMask(x_seq, dataset_data, PedsList_seq, args.neighborhood_size, args.grid_size, args.use_cuda, device=device)
                     
                     if args.use_cuda:
-                        x_seq = x_seq.cuda()
-                        orig_x_seq = orig_x_seq.cuda()
+                        x_seq = x_seq.to(device)
+                        orig_x_seq = orig_x_seq.to(device)
 
                     #vectorize datapoints
                     x_seq, first_values_dict = vectorize_seq(x_seq, PedsList_seq, lookup_seq)

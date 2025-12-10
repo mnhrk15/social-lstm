@@ -16,6 +16,14 @@ from helper import *
 from grid import getSequenceGridMask
 
 
+def select_device(use_cuda_flag: bool):
+    if use_cuda_flag and torch.cuda.is_available():
+        return torch.device("cuda")
+    if use_cuda_flag and torch.backends.mps.is_available():
+        return torch.device("mps")
+    return torch.device("cpu")
+
+
 def main():
     
     parser = argparse.ArgumentParser()
@@ -49,6 +57,9 @@ def main():
     
     # Parse the parameters
     sample_args = parser.parse_args()
+    device = select_device(sample_args.use_cuda)
+    sample_args.device = device
+    sample_args.use_cuda = device.type != "cpu"
     
     #for drive run
     prefix = ''
@@ -77,12 +88,12 @@ def main():
     # Define the path for the config file for saved args
     with open(os.path.join(save_directory,'config.pkl'), 'rb') as f:
         saved_args = pickle.load(f)
+    saved_args.device = device
+    saved_args.use_cuda = device.type != "cpu"
 
     origin = (0,0)
     reference_point = (0,1)
-    net = get_model(sample_args.method, saved_args, True)
-    if sample_args.use_cuda:        
-        net = net.cuda()
+    net = get_model(sample_args.method, saved_args, True).to(device)
 
     # Get the checkpoint path
     checkpoint_path = os.path.join(save_directory, save_tar_name+str(sample_args.epoch)+'.tar')
@@ -156,9 +167,9 @@ def main():
 
             #grid mask calculation
             if sample_args.method == 2: #obstacle lstm
-                grid_seq = getSequenceGridMask(x_seq, dataset_data, PedsList_seq, saved_args.neighborhood_size, saved_args.grid_size, saved_args.use_cuda, True)
+                grid_seq = getSequenceGridMask(x_seq, dataset_data, PedsList_seq, saved_args.neighborhood_size, saved_args.grid_size, saved_args.use_cuda, True, device=device)
             elif  sample_args.method == 1: #social lstm   
-                grid_seq = getSequenceGridMask(x_seq, dataset_data, PedsList_seq, saved_args.neighborhood_size, saved_args.grid_size, saved_args.use_cuda)
+                grid_seq = getSequenceGridMask(x_seq, dataset_data, PedsList_seq, saved_args.neighborhood_size, saved_args.grid_size, saved_args.use_cuda, device=device)
 
             #vectorize datapoints
             x_seq, first_values_dict = vectorize_seq(x_seq, PedsList_seq, lookup_seq)
@@ -172,8 +183,8 @@ def main():
             # x_seq, first_values_dict = vectorize_seq(x_seq, PedsList_seq, lookup_seq)
 
 
-            if sample_args.use_cuda:                    
-                x_seq = x_seq.cuda()
+            if sample_args.use_cuda:
+                x_seq = x_seq.to(device)
 
             if sample_args.method == 3: #vanilla lstm
                 ret_x_seq, loss = sample_validation_data_vanilla(x_seq, PedsList_seq, sample_args, net, lookup_seq, numPedsList_seq, dataloader)

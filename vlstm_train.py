@@ -13,6 +13,14 @@ from utils import DataLoader
 from helper import *
 
 
+def select_device(use_cuda_flag: bool):
+    if use_cuda_flag and torch.cuda.is_available():
+        return torch.device("cuda")
+    if use_cuda_flag and torch.backends.mps.is_available():
+        return torch.device("mps")
+    return torch.device("cpu")
+
+
 def main():
     
     parser = argparse.ArgumentParser()
@@ -81,7 +89,9 @@ def main():
 
     
     args = parser.parse_args()
-    
+    device = select_device(args.use_cuda)
+    args.device = device
+    args.use_cuda = device.type != "cpu"
     train(args)
 
 
@@ -142,9 +152,8 @@ def train(args):
         return os.path.join(save_directory, method_name, model_name, save_tar_name+str(x)+'.tar')
 
     # model creation
-    net = VLSTMModel(args)
-    if args.use_cuda:
-        net = net.cuda()
+    device = args.device
+    net = VLSTMModel(args).to(device)
 
     # optimizer = torch.optim.RMSprop(net.parameters(), lr=args.learning_rate)
     optimizer = torch.optim.Adagrad(net.parameters(), weight_decay=args.lambda_param)
@@ -202,21 +211,17 @@ def train(args):
                 # vectorize trajectories in sequence
                 x_seq, _ = vectorize_seq(x_seq, PedsList_seq, lookup_seq)
 
-                if args.use_cuda:                    
-                    x_seq = x_seq.cuda()
+                if args.use_cuda:
+                    x_seq = x_seq.to(device)
 
 
                 #number of peds in this sequence per frame
                 numNodes = len(lookup_seq)
 
 
-                hidden_states = Variable(torch.zeros(numNodes, args.rnn_size))
-                if args.use_cuda:                    
-                    hidden_states = hidden_states.cuda()
+                hidden_states = Variable(torch.zeros(numNodes, args.rnn_size, device=device))
 
-                cell_states = Variable(torch.zeros(numNodes, args.rnn_size))
-                if args.use_cuda:                    
-                    cell_states = cell_states.cuda()
+                cell_states = Variable(torch.zeros(numNodes, args.rnn_size, device=device))
 
                 # Zero out gradients
                 net.zero_grad()
@@ -290,18 +295,14 @@ def train(args):
 
 
 
-                    if args.use_cuda:                    
-                        x_seq = x_seq.cuda()
+                    if args.use_cuda:
+                        x_seq = x_seq.to(device)
 
                     #number of peds in this sequence per frame
                     numNodes = len(lookup_seq)
 
-                    hidden_states = Variable(torch.zeros(numNodes, args.rnn_size))
-                    if args.use_cuda:                    
-                        hidden_states = hidden_states.cuda()
-                    cell_states = Variable(torch.zeros(numNodes, args.rnn_size))
-                    if args.use_cuda:                    
-                        cell_states = cell_states.cuda()
+                    hidden_states = Variable(torch.zeros(numNodes, args.rnn_size, device=device))
+                    cell_states = Variable(torch.zeros(numNodes, args.rnn_size, device=device))
 
                     # Forward prop
                     outputs, _, _ = net(x_seq[:-1], hidden_states, cell_states, PedsList_seq[:-1], numPedsList_seq , dataloader, lookup_seq)
@@ -408,8 +409,8 @@ def train(args):
                     #vectorize datapoints
                     x_seq, first_values_dict = vectorize_seq(x_seq, PedsList_seq, lookup_seq)
 
-                    if args.use_cuda:                    
-                        x_seq = x_seq.cuda()
+                    if args.use_cuda:
+                        x_seq = x_seq.to(device)
 
                     ret_x_seq, loss = sample_validation_data_vanilla(x_seq, PedsList_seq, args, net, lookup_seq, numPedsList_seq, dataloader)
                     

@@ -80,10 +80,14 @@ def sample_gaussian_2d(mux, muy, sx, sy, corr, nodesPresent, look_up):
         if node not in converted_node_present:
             continue
         mean = [o_mux[node], o_muy[node]]
-        cov = [[o_sx[node]*o_sx[node], o_corr[node]*o_sx[node]*o_sy[node]], 
-                [o_corr[node]*o_sx[node]*o_sy[node], o_sy[node]*o_sy[node]]]
+        cov = [
+            [(o_sx[node]*o_sx[node]).detach().cpu().item(),
+             (o_corr[node]*o_sx[node]*o_sy[node]).detach().cpu().item()],
+            [(o_corr[node]*o_sx[node]*o_sy[node]).detach().cpu().item(),
+             (o_sy[node]*o_sy[node]).detach().cpu().item()]
+        ]
 
-        mean = np.array(mean, dtype='float')
+        mean = np.array(torch.stack(mean).detach().cpu().numpy(), dtype='float')
         cov = np.array(cov, dtype='float')
         next_values = np.random.multivariate_normal(mean, cov, 1)
         next_x[node] = next_values[0][0]
@@ -113,9 +117,9 @@ def get_mean_error(ret_nodes, nodes, assumedNodesPresent, trueNodesPresent, usin
     Error : Mean euclidean distance between predicted trajectory and the true trajectory
     '''
     pred_length = ret_nodes.size()[0]
-    error = torch.zeros(pred_length)
-    if using_cuda:
-        error = error.cuda()
+    # keep error tensor on the same device as inputs
+    device = ret_nodes.device
+    error = torch.zeros(pred_length, device=device)
 
     for tstep in range(pred_length):
         counter = 0
@@ -436,22 +440,16 @@ def sample_validation_data(x_seq, Pedlist, grid, args, net, look_up, num_pedlist
 
     # Construct variables for hidden and cell states
     with torch.no_grad():
-        hidden_states = Variable(torch.zeros(numx_seq, net.args.rnn_size))
-        if args.use_cuda:
-            hidden_states = hidden_states.cuda()
+        device = getattr(args, "device", torch.device("cuda" if args.use_cuda else "cpu"))
+
+        hidden_states = Variable(torch.zeros(numx_seq, net.args.rnn_size, device=device))
         if not args.gru:
-            cell_states = Variable(torch.zeros(numx_seq, net.args.rnn_size))
-            if args.use_cuda:
-                cell_states = cell_states.cuda()
+            cell_states = Variable(torch.zeros(numx_seq, net.args.rnn_size, device=device))
         else:
             cell_states = None
 
 
-        ret_x_seq = Variable(torch.zeros(args.seq_length, numx_seq, 2))
-
-        # Initialize the return data structure
-        if args.use_cuda:
-            ret_x_seq = ret_x_seq.cuda()
+        ret_x_seq = Variable(torch.zeros(args.seq_length, numx_seq, 2, device=device))
 
         ret_x_seq[0] = x_seq[0]
 
@@ -493,22 +491,15 @@ def sample_validation_data_vanilla(x_seq, Pedlist, args, net, look_up, num_pedli
     total_loss = 0
 
     # Construct variables for hidden and cell states
-    hidden_states = Variable(torch.zeros(numx_seq, net.args.rnn_size), volatile=True)
-    if args.use_cuda:
-        hidden_states = hidden_states.cuda()
+    device = getattr(args, "device", torch.device("cuda" if args.use_cuda else "cpu"))
+    hidden_states = Variable(torch.zeros(numx_seq, net.args.rnn_size, device=device), volatile=True)
     if not args.gru:
-        cell_states = Variable(torch.zeros(numx_seq, net.args.rnn_size), volatile=True)
-        if args.use_cuda:
-            cell_states = cell_states.cuda()
+        cell_states = Variable(torch.zeros(numx_seq, net.args.rnn_size, device=device), volatile=True)
     else:
         cell_states = None
 
 
-    ret_x_seq = Variable(torch.zeros(args.seq_length, numx_seq, 2), volatile=True)
-
-    # Initialize the return data structure
-    if args.use_cuda:
-        ret_x_seq = ret_x_seq.cuda()
+    ret_x_seq = Variable(torch.zeros(args.seq_length, numx_seq, 2, device=device), volatile=True)
 
     ret_x_seq[0] = x_seq[0]
 
