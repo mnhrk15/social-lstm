@@ -219,8 +219,8 @@ def main():
 
 
 
-            if dataset_pointer_ins is not dataloader.dataset_pointer:
-                if dataloader.dataset_pointer is not 0:
+            if dataset_pointer_ins != dataloader.dataset_pointer:
+                if dataloader.dataset_pointer != 0:
                     iteration_submission.append(submission)
                     iteration_result.append(results)
 
@@ -229,8 +229,20 @@ def main():
                 results = []
 
             
-            submission.append(submission_preprocess(dataloader, ret_x_seq.data[sample_args.obs_length:, lookup_seq[target_id], :].numpy(), sample_args.pred_length, sample_args.obs_length, target_id))
-            results.append((x_seq.data.cpu().numpy(), ret_x_seq.data.cpu().numpy(), PedsList_seq, lookup_seq , dataloader.get_frame_sequence(seq_lenght), target_id, sample_args.obs_length))
+            submission.append(submission_preprocess(
+                dataloader,
+                ret_x_seq.detach().cpu().numpy()[sample_args.obs_length:, lookup_seq[target_id], :],
+                sample_args.pred_length,
+                sample_args.obs_length,
+                target_id))
+            results.append((
+                x_seq.detach().cpu().numpy(),
+                ret_x_seq.detach().cpu().numpy(),
+                PedsList_seq,
+                lookup_seq,
+                dataloader.get_frame_sequence(seq_lenght),
+                target_id,
+                sample_args.obs_length))
 
 
         iteration_submission.append(submission)
@@ -334,7 +346,7 @@ def sample(x_seq, Pedlist, args, net, true_x_seq, true_Pedlist, saved_args, dime
             true_Pedlist[tstep+1] = [int(_x_seq) for _x_seq in true_Pedlist[tstep+1]]
             next_ped_list = true_Pedlist[tstep+1].copy()
             converted_pedlist = [look_up[_x_seq] for _x_seq in next_ped_list]
-            list_of_x_seq = Variable(torch.LongTensor(converted_pedlist, device=device))
+            list_of_x_seq = torch.tensor(converted_pedlist, device=device, dtype=torch.long)
            
             #Get their predicted positions
             current_x_seq = torch.index_select(ret_x_seq[tstep+1], 0, list_of_x_seq)

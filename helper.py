@@ -117,8 +117,9 @@ def get_mean_error(ret_nodes, nodes, assumedNodesPresent, trueNodesPresent, usin
     Error : Mean euclidean distance between predicted trajectory and the true trajectory
     '''
     pred_length = ret_nodes.size()[0]
-    # keep error tensor on the same device as inputs
+    # keep all tensors on the same device as ret_nodes
     device = ret_nodes.device
+    nodes = nodes.to(device)
     error = torch.zeros(pred_length, device=device)
 
     for tstep in range(pred_length):
@@ -168,7 +169,9 @@ def get_final_error(ret_nodes, nodes, assumedNodesPresent, trueNodesPresent, loo
     Error : Mean final euclidean distance between predicted trajectory and the true trajectory
     '''
     pred_length = ret_nodes.size()[0]
-    error = 0
+    device = ret_nodes.device
+    nodes = nodes.to(device)
+    error = torch.tensor(0.0, device=device)
     counter = 0
 
     # Last time-step
@@ -390,7 +393,8 @@ def revert_seq(x_seq, PedsList_seq, lookup_seq, first_values_dict):
     absolute_x_seq = x_seq.clone()
     for ind, frame in enumerate(x_seq):
         for ped in PedsList_seq[ind]:
-            absolute_x_seq[ind, lookup_seq[ped], 0:2] = frame[lookup_seq[ped], 0:2] + first_values_dict[ped][0:2]
+            base = first_values_dict[ped][0:2].to(frame.device)
+            absolute_x_seq[ind, lookup_seq[ped], 0:2] = frame[lookup_seq[ped], 0:2] + base
 
     return absolute_x_seq
 

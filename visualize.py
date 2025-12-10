@@ -699,7 +699,7 @@ def main():
     plot_file_directory = 'validation'
 
     # Directories
-    if args.num_of_data is 0:
+    if args.num_of_data == 0:
         plot_file_directory = 'test'
 
     # creation of paths
@@ -720,15 +720,11 @@ def main():
         video_save_directory = os.path.join(video_directory, folder_name)
         figure_save_directory = os.path.join(save_plot_directory, folder_name)
 
-        # remove existed plots
+        # ensure directories exist, then clear
         clear_folder(video_save_directory)
         clear_folder(figure_save_directory)
-
-
-        if not os.path.exists(video_save_directory):
-            os.makedirs(video_save_directory)
-        if not os.path.exists(figure_save_directory):
-            os.makedirs(figure_save_directory)
+        os.makedirs(video_save_directory, exist_ok=True)
+        os.makedirs(figure_save_directory, exist_ok=True)
         
 
         try:
@@ -739,10 +735,6 @@ def main():
 
 
         results = pickle.load(f)
-        result_arr = np.array(results)
-        true_trajectories = np.array(result_arr[:,0])
-        pred_trajectories = np.array(result_arr[:,1])
-        frames = np.array(result_arr[:, 4])
 
         target_id_trajs = []
         args.max_target_ped = np.clip(args.max_target_ped, 0, len(results)-1)
@@ -751,17 +743,26 @@ def main():
         max_r = 10
         plot_offset = 1
 
-        for i in range(len(results)):
+        for i, res in enumerate(results):
             print("##########################################################################################")
             name = 'sequence' + str(i).zfill(5)
             print("Now processing seq: ",name)
 
-            if args.num_of_data is 0: #test data visualization
-                target_traj = plot_trajectories(results[i][0], results[i][1], results[i][2], results[i][3], results[i][4], name, figure_save_directory,  args.min_traj ,args.max_ped_ratio, results[i][5], [min_r, max_r, plot_offset], results[i][6])
+            if len(res) == 7:
+                true_traj, pred_traj, pedlist_seq, lookup_seq, frames, target_id, obs_len = res
+            elif len(res) == 6:
+                true_traj, pred_traj, pedlist_seq, lookup_seq, frames, target_id = res
+                obs_len = max(1, len(frames)//2)
             else:
-                target_traj =  plot_trajectories(results[i][0], results[i][1], results[i][2], results[i][3],results[i][4], name, figure_save_directory, args.min_traj ,args.max_ped_ratio, results[i][5], [min_r, max_r, plot_offset], 20)
-            target_traj.append(results[i][2])#pedlist
-            target_traj.append(results[i][3])#lookup
+                print("Unexpected result format, skipping sequence.")
+                continue
+
+            if args.num_of_data == 0: #test data visualization
+                target_traj = plot_trajectories(true_traj, pred_traj, pedlist_seq, lookup_seq, frames, name, figure_save_directory,  args.min_traj ,args.max_ped_ratio, target_id, [min_r, max_r, plot_offset], obs_len)
+            else:
+                target_traj =  plot_trajectories(true_traj, pred_traj, pedlist_seq, lookup_seq, frames, name, figure_save_directory, args.min_traj ,args.max_ped_ratio, target_id, [min_r, max_r, plot_offset], 20)
+            target_traj.append(pedlist_seq)#pedlist
+            target_traj.append(lookup_seq)#lookup
             target_id_trajs.append(target_traj)
 
         
