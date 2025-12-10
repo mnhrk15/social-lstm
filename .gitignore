@@ -23,6 +23,8 @@ model/
 *.ckpt
 *.tar
 *.npz
+plot/
+result/
 
 # データ生成物
 data/**/*.cpkl
